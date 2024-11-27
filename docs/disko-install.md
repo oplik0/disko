@@ -22,7 +22,7 @@ For a fresh installation, where **disko-install** will handle partitioning and
 setting up the disk, use the following syntax:
 
 ```console
-sudo nix run 'github:nix-community/disko#disko-install' -- --flake <flake-url>#<flake-attr> --disk <disk-name> <disk-device>
+sudo nix run 'github:nix-community/disko/latest#disko-install' -- --flake <flake-url>#<flake-attr> --disk <disk-name> <disk-device>
 ```
 
 Example:
@@ -36,7 +36,7 @@ example we assume a system that has been booted with EFI:
 ```nix
 {
   inputs.nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
-  inputs.disko.url = "github:nix-community/disko";
+  inputs.disko.url = "github:nix-community/disko/latest";
   inputs.disko.inputs.nixpkgs.follows = "nixpkgs";
 
   outputs = { self, disko, nixpkgs }: {
@@ -107,7 +107,7 @@ nvme0n1     259:0    0  1.8T  0 disk
 In our example, we want to install to a USB-stick (/dev/sda):
 
 ```console
-$ sudo nix run 'github:nix-community/disko#disko-install' -- --flake '/tmp/config/etc/nixos#mymachine' --disk main /dev/sda
+$ sudo nix run 'github:nix-community/disko/latest#disko-install' -- --flake '/tmp/config/etc/nixos#mymachine' --disk main /dev/sda
 ```
 
 Afterwards you can test your USB-stick by either selecting during the boot or
@@ -126,7 +126,7 @@ new hardware or to prioritize it in your current machine's boot order, use the
 --write-efi-boot-entries option:
 
 ```console
-$ sudo nix run 'github:nix-community/disko#disko-install' -- --write-efi-boot-entries --flake '/tmp/config/etc/nixos#mymachine' --disk main /dev/sda
+$ sudo nix run 'github:nix-community/disko/latest#disko-install' -- --write-efi-boot-entries --flake '/tmp/config/etc/nixos#mymachine' --disk main /dev/sda
 ```
 
 This command installs NixOS with **disko-install** and sets the newly installed
@@ -137,7 +137,7 @@ from other devices if needed.
 
 If you want to use **disko-install** from a custom installer without internet,
 you need to make sure that in addition to the toplevel of your NixOS closure
-that you plan to install, it also needs to contain  **diskoScript** and all the
+that you plan to install, it also needs to contain **diskoScript** and all the
 flake inputs for evaluation.
 
 #### Example configuration to install
@@ -204,6 +204,11 @@ let
     self.nixosConfigurations.your-machine.config.system.build.diskoScript
     self.nixosConfigurations.your-machine.config.system.build.diskoScript.drvPath
     self.nixosConfigurations.your-machine.pkgs.stdenv.drvPath
+
+    # https://github.com/NixOS/nixpkgs/blob/f2fd33a198a58c4f3d53213f01432e4d88474956/nixos/modules/system/activation/top-level.nix#L342
+    self.nixosConfigurations.your-machine.pkgs.perlPackages.ConfigIniFiles
+    self.nixosConfigurations.your-machine.pkgs.perlPackages.FileSlurp
+
     (self.nixosConfigurations.your-machine.pkgs.closureInfo { rootPaths = [ ]; }).drvPath
   ] ++ builtins.map (i: i.outPath) (builtins.attrValues self.inputs);
 

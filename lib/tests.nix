@@ -38,7 +38,23 @@ let
       };
 
     # list of devices generated inside qemu
-    devices = [ "/dev/vda" "/dev/vdb" "/dev/vdc" "/dev/vdd" "/dev/vde" "/dev/vdf" ];
+    devices = [
+      "/dev/vda"
+      "/dev/vdb"
+      "/dev/vdc"
+      "/dev/vdd"
+      "/dev/vde"
+      "/dev/vdf"
+      "/dev/vdg"
+      "/dev/vdh"
+      "/dev/vdi"
+      "/dev/vdj"
+      "/dev/vdk"
+      "/dev/vdl"
+      "/dev/vdm"
+      "/dev/vdn"
+      "/dev/vdo"
+    ];
 
     # This is the test generator for a disko test
     makeDiskoTest =
@@ -50,10 +66,11 @@ let
       , bootCommands ? ""
       , extraInstallerConfig ? { }
       , extraSystemConfig ? { }
-      , efi ? !pkgs.hostPlatform.isRiscV64
+      , efi ? !pkgs.stdenv.hostPlatform.isRiscV64
       , postDisko ? ""
       , testMode ? "module" # can be one of direct module cli
       , testBoot ? true # if we actually want to test booting or just create/mount
+      , enableOCR ? false
       }:
       let
         makeTest' = args:
@@ -80,9 +97,9 @@ let
         testConfigBooted = testLib.prepareDiskoConfig diskoConfigWithArgs testLib.devices;
 
         tsp-generator = pkgs.callPackage ../. { checked = true; };
-        tsp-format = (tsp-generator.formatScript testConfigInstall) pkgs;
-        tsp-mount = (tsp-generator.mountScript testConfigInstall) pkgs;
-        tsp-disko = (tsp-generator.diskoScript testConfigInstall) pkgs;
+        tsp-format = (tsp-generator._cliFormat testConfigInstall) pkgs;
+        tsp-mount = (tsp-generator._cliMount testConfigInstall) pkgs;
+        tsp-disko = (tsp-generator._cliDestroyFormatMount testConfigInstall) pkgs;
         tsp-config = tsp-generator.config testConfigBooted;
         num-disks = builtins.length (lib.attrNames testConfigBooted.disko.devices.disk);
 
@@ -163,6 +180,8 @@ let
       in
       makeTest' {
         name = "disko-${name}";
+        meta.timeout = 600; # 10 minutes
+        inherit enableOCR;
 
         nodes.machine = { pkgs, ... }: {
           imports = [
@@ -260,24 +279,24 @@ let
           machine.succeed("echo -n 'secretsecret' > /tmp/secret.key")
           ${lib.optionalString (testMode == "direct") ''
             # running direct mode
-            machine.succeed("${tsp-format}")
-            machine.succeed("${tsp-mount}")
-            machine.succeed("${tsp-mount}") # verify that mount is idempotent
-            machine.succeed("${tsp-disko}") # verify that we can destroy and recreate
+            machine.succeed("${lib.getExe tsp-format}")
+            machine.succeed("${lib.getExe tsp-mount}")
+            machine.succeed("${lib.getExe tsp-mount}") # verify that mount is idempotent
+            machine.succeed("${lib.getExe tsp-disko} --yes-wipe-all-disks") # verify that we can destroy and recreate
             machine.succeed("mkdir -p /mnt/home")
             machine.succeed("touch /mnt/home/testfile")
-            machine.succeed("${tsp-format}") # verify that format is idempotent
+            machine.succeed("${lib.getExe tsp-format}") # verify that format is idempotent
             machine.succeed("test -e /mnt/home/testfile")
           ''}
           ${lib.optionalString (testMode == "module") ''
             #  running module mode
-            machine.succeed("${nodes.machine.system.build.formatScript}")
-            machine.succeed("${nodes.machine.system.build.mountScript}")
-            machine.succeed("${nodes.machine.system.build.mountScript}") # verify that mount is idempotent
-            machine.succeed("${nodes.machine.system.build.diskoScript}") # verify that we can destroy and recreate again
+            machine.succeed("${lib.getExe nodes.machine.system.build.format}")
+            machine.succeed("${lib.getExe nodes.machine.system.build.mount}")
+            machine.succeed("${lib.getExe nodes.machine.system.build.mount}") # verify that mount is idempotent
+            machine.succeed("${lib.getExe nodes.machine.system.build.destroyFormatMount} --yes-wipe-all-disks") # verify that we can destroy and recreate again
             machine.succeed("mkdir -p /mnt/home")
             machine.succeed("touch /mnt/home/testfile")
-            machine.succeed("${nodes.machine.system.build.formatScript}") # verify that format is idempotent
+            machine.succeed("${lib.getExe nodes.machine.system.build.format}") # verify that format is idempotent
             machine.succeed("test -e /mnt/home/testfile")
           ''}
 

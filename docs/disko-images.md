@@ -20,7 +20,7 @@ In the this example we create a flake containing a nixos configuration for
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    disko.url = "github:nix-community/disko";
+    disko.url = "github:nix-community/disko/latest";
     disko.inputs.nixpkgs.follows = "nixpkgs";
   };
 
@@ -90,15 +90,19 @@ In the this example we create a flake containing a nixos configuration for
 
 ## Additional Configuration
 
+- For custom image name output, define the image name in your Disko configuration:
+
+  ```console
+  disko.devices.disk.<drive>.imageName = "nixos-x86_64-linux-generic-btrfs"; # Set your preferred name
+  ```
+
+  The image scirpt will produce `nixos-x86_64-linux-generic-btrfs.raw` instead of `<drive>.raw`.
+
 - For virtual drive use, define the image size in your Disko configuration:
 
   ```console
   disko.devices.disk.<drive>.imageSize = "32G"; # Set your preferred size
   ```
-
-- If the `.raw` image size is not optimal, use `--write-to-disk` to write
-  directly to a drive. This bypasses the `.raw` file generation, which saves on
-  read/write operations and is suitable for single disk setups.
 
 ## Understanding the Image Generation Process
 

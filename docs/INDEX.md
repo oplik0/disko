@@ -1,8 +1,10 @@
 # disko - Declarative disk partitioning
 
-<img title="" src="./logo.jpeg" alt="" width="220">
+<img title="" src="./logo.png" alt="" width="220">
 
 ## Table of Contents
+
+### For users
 
 - [README](../README.md)
 - [Quickstart](./quickstart.md)
@@ -14,3 +16,7 @@
 - [Reference](./reference.md)
 - [Upgrade Guide](./upgrade-guide.md)
   - [Migrating to the new GPT layout](./table-to-gpt.md)
+
+### For contributors
+
+- [Running and debugging tests](./testing.md)

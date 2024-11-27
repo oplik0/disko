@@ -21,7 +21,7 @@ let
     ${lib.optionalString (lib.hasAttr "keyFileOffset" config.settings) "--keyfile-offset ${builtins.toString config.settings.keyFileOffset}"} \
   '';
   cryptsetupOpen = ''
-    cryptsetup open ${config.device} ${config.name} \
+    cryptsetup open "${config.device}" "${config.name}" \
       ${lib.optionalString (config.settings.allowDiscards or false) "--allow-discards"} \
       ${lib.optionalString (config.settings.bypassWorkqueues or false) "--perf-no_read_workqueue --perf-no_write_workqueue"} \
       ${toString config.extraOpenArgs} \
@@ -59,9 +59,11 @@ in
     askPassword = lib.mkOption {
       type = lib.types.bool;
       default = config.keyFile == null && config.passwordFile == null && (! config.settings ? "keyFile");
+      defaultText = "true if neither keyFile nor passwordFile are set";
       description = "Whether to ask for a password for initial encryption";
     };
     settings = lib.mkOption {
+      type = lib.types.attrsOf lib.types.anything;
       default = { };
       description = "LUKS settings (as defined in configuration.nix in boot.initrd.luks.devices.<name>)";
       example = ''{
@@ -132,10 +134,10 @@ in
               echo "Passwords did not match, please try again."
             done
           ''}
-          cryptsetup -q luksFormat ${config.device} ${toString config.extraFormatArgs} ${keyFileArgs}
+          cryptsetup -q luksFormat "${config.device}" ${toString config.extraFormatArgs} ${keyFileArgs}
           ${cryptsetupOpen} --persistent
           ${toString (lib.forEach config.additionalKeyFiles (keyFile: ''
-            cryptsetup luksAddKey ${config.device} ${keyFile} ${keyFileArgs}
+            cryptsetup luksAddKey "${config.device}" ${keyFile} ${keyFileArgs}
           ''))}
         fi
         ${lib.optionalString (config.content != null) config.content._create}
@@ -149,7 +151,7 @@ in
         in
         {
           dev = ''
-            if ! cryptsetup status ${config.name} >/dev/null 2>/dev/null; then
+            if ! cryptsetup status "${config.name}" >/dev/null 2>/dev/null; then
               ${lib.optionalString config.askPassword ''
                 if [ -z ''${IN_DISKO_TEST+x} ]; then
                   set +x

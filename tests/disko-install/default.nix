@@ -1,10 +1,15 @@
-{ pkgs ? import <nixpkgs> { }, self }:
+{ pkgs ? import <nixpkgs> { }, self, diskoVersion }:
 let
-  disko = pkgs.callPackage ../../package.nix { };
+  disko = pkgs.callPackage ../../package.nix { inherit diskoVersion; };
 
   dependencies = [
     self.nixosConfigurations.testmachine.pkgs.stdenv.drvPath
     (self.nixosConfigurations.testmachine.pkgs.closureInfo { rootPaths = [ ]; }).drvPath
+
+    # https://github.com/NixOS/nixpkgs/blob/f2fd33a198a58c4f3d53213f01432e4d88474956/nixos/modules/system/activation/top-level.nix#L342
+    self.nixosConfigurations.testmachine.pkgs.perlPackages.ConfigIniFiles
+    self.nixosConfigurations.testmachine.pkgs.perlPackages.FileSlurp
+
     self.nixosConfigurations.testmachine.config.system.build.toplevel
     self.nixosConfigurations.testmachine.config.system.build.diskoScript
   ] ++ builtins.map (i: i.outPath) (builtins.attrValues self.inputs);

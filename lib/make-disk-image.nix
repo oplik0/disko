@@ -12,15 +12,19 @@ let
   checked = diskoCfg.checkScripts;
 
   configSupportsZfs = config.boot.supportedFilesystems.zfs or false;
-  vmTools = pkgs.vmTools.override {
-    rootModules = [ "9p" "9pnet_virtio" "virtio_pci" "virtio_blk" ]
-      ++ (lib.optional configSupportsZfs "zfs")
-      ++ cfg.extraRootModules;
-    customQemu = cfg.qemu;
-    kernel = pkgs.aggregateModules
-      (with cfg.kernelPackages; [ kernel ]
-        ++ lib.optional (lib.elem "zfs" cfg.extraRootModules || configSupportsZfs) zfs);
-  };
+  vmTools = pkgs.vmTools.override
+    {
+      rootModules = [ "9p" "9pnet_virtio" "virtio_pci" "virtio_blk" ]
+        ++ (lib.optional configSupportsZfs "zfs")
+        ++ cfg.extraRootModules;
+      kernel = pkgs.aggregateModules
+        (with cfg.kernelPackages; [ kernel ]
+          ++ lib.optional (lib.elem "zfs" cfg.extraRootModules || configSupportsZfs) zfs);
+    }
+  // lib.optionalAttrs (diskoLib.vmToolsSupportsCustomQemu pkgs)
+    {
+      customQemu = cfg.qemu;
+    };
   cleanedConfig = diskoLib.testLib.prepareDiskoConfig config diskoLib.testLib.devices;
   systemToInstall = extendModules {
     modules = [
@@ -41,9 +45,10 @@ let
     nix
     util-linux
     findutils
+    kmod
   ] ++ cfg.extraDependencies;
   preVM = ''
-    ${lib.concatMapStringsSep "\n" (disk: "${pkgs.qemu}/bin/qemu-img create -f ${imageFormat} ${disk.name}.${imageFormat} ${disk.imageSize}") (lib.attrValues diskoCfg.devices.disk)}
+    ${lib.concatMapStringsSep "\n" (disk: "${pkgs.qemu}/bin/qemu-img create -f ${imageFormat} ${disk.imageName}.${imageFormat} ${disk.imageSize}") (lib.attrValues diskoCfg.devices.disk)}
     # This makes disko work, when canTouchEfiVariables is set to true.
     # Technically these boot entries will no be persisted this way, but
     # in most cases this is OK, because we can rely on the standard location for UEFI executables.
@@ -52,7 +57,7 @@ let
   postVM = ''
     # shellcheck disable=SC2154
     mkdir -p "$out"
-    ${lib.concatMapStringsSep "\n" (disk: "mv ${disk.name}.${imageFormat} \"$out\"/${disk.name}.${imageFormat}") (lib.attrValues diskoCfg.devices.disk)}
+    ${lib.concatMapStringsSep "\n" (disk: "mv ${disk.imageName}.${imageFormat} \"$out\"/${disk.imageName}.${imageFormat}") (lib.attrValues diskoCfg.devices.disk)}
     ${cfg.extraPostVM}
   '';
 
@@ -79,7 +84,7 @@ let
     ${lib.optionalString diskoCfg.testMode ''
       export IN_DISKO_TEST=1
     ''}
-    ${systemToInstall.config.system.build.diskoScript}
+    ${lib.getExe systemToInstall.config.system.build.destroyFormatMount} --yes-wipe-all-disks
   '';
 
   installer = lib.optionalString cfg.copyNixStore ''
@@ -100,7 +105,7 @@ let
     "-drive if=pflash,format=raw,unit=1,file=efivars.fd"
   ] ++ builtins.map
     (disk:
-      "-drive file=${disk.name}.${imageFormat},if=virtio,cache=unsafe,werror=report,format=${imageFormat}"
+      "-drive file=${disk.imageName}.${imageFormat},if=virtio,cache=unsafe,werror=report,format=${imageFormat}"
     )
     (lib.attrValues diskoCfg.devices.disk));
 in

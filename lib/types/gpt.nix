@@ -26,7 +26,8 @@ in
               lib.types.either
                 (lib.types.strMatching (hexPattern 4))
                 (lib.types.strMatching (lib.concatMapStringsSep "-" hexPattern [ 8 4 4 4 12 ]));
-            default = "8300";
+            default = if partition.config.content != null && partition.config.content.type == "swap" then "8200" else "8300";
+            defaultText = ''8300 (Linux filesystem) normally, 8200 (Linux swap) if content.type is "swap"'';
             description = ''
               Filesystem type to use.
               This can either be an sgdisk-specific short code (run sgdisk -L to see what is available),
@@ -40,7 +41,14 @@ in
               # workaround because mdadm partlabel do not appear in /dev/disk/by-partlabel
                 "/dev/disk/by-id/md-name-any:${config._parent.name}-part${toString partition.config._index}"
               else
-                "/dev/disk/by-partlabel/${partition.config.label}";
+                "/dev/disk/by-partlabel/${diskoLib.hexEscapeUdevSymlink partition.config.label}";
+            defaultText = ''
+              if the parent is an mdadm device:
+                /dev/disk/by-id/md-name-any:''${config._parent.name}-part''${toString partition.config._index}
+              
+              otherwise:
+                /dev/disk/by-partlabel/''${diskoLib.hexEscapeUdevSymlink partition.config.label}
+            '';
             description = "Device to use for the partition";
           };
           priority = lib.mkOption {
@@ -79,6 +87,11 @@ in
                 builtins.substring 0 limit (builtins.hashString "sha256" label)
               else
                 label;
+            defaultText = ''
+              ''${config._parent.type}-''${config._parent.name}-''${partition.config.name}
+
+              or a truncated hash of the above if it is longer than 36 characters
+            '';
           };
           size = lib.mkOption {
             type = lib.types.either (lib.types.enum [ "100%" ]) (lib.types.strMatching "[0-9]+[KMGTP]?");
@@ -92,6 +105,7 @@ in
           alignment = lib.mkOption {
             type = lib.types.int;
             default = if (builtins.substring (builtins.stringLength partition.config.start - 1) 1 partition.config.start == "s" || (builtins.substring (builtins.stringLength partition.config.end - 1) 1 partition.config.end == "s")) then 1 else 0;
+            defaultText = "1 if the unit of start or end is sectors, 0 otherwise";
             description = "Alignment of the partition, if sectors are used as start or end it can be aligned to 1";
           };
           start = lib.mkOption {
@@ -102,6 +116,9 @@ in
           end = lib.mkOption {
             type = lib.types.str;
             default = if partition.config.size == "100%" then "-0" else "+${partition.config.size}";
+            defaultText = ''
+              if partition.config.size == "100%" then "-0" else "+''${partition.config.size}";
+            '';
             description = ''
               End of the partition, in sgdisk format.
               Use + for relative sizes from the partitions start
@@ -126,12 +143,12 @@ in
                   inherit config options;
                   default = ''
                     ${lib.optionalString (hp.config.mbrPartitionType != null) ''
-                      sfdisk --label-nested dos --part-type ${parent.device} ${(toString partition.config._index)} ${hp.config.mbrPartitionType}
+                      sfdisk --label-nested dos --part-type "${parent.device}" ${(toString partition.config._index)} ${hp.config.mbrPartitionType}
                       udevadm trigger --subsystem-match=block
                       udevadm settle
                     ''}
                     ${lib.optionalString hp.config.mbrBootableFlag ''
-                      sfdisk --label-nested dos --activate ${parent.device} ${(toString partition.config._index)}
+                      sfdisk --label-nested dos --activate "${parent.device}" ${(toString partition.config._index)}
                     ''}
                   '';
                 };
@@ -141,8 +158,10 @@ in
             description = "Entry to add to the Hybrid MBR table";
           };
           _index = lib.mkOption {
+            type = lib.types.int;
             internal = true;
             default = diskoLib.indexOf (x: x.name == partition.config.name) sortedPartitions 0;
+            defaultText = null;
           };
         };
       }));
@@ -174,23 +193,23 @@ in
       inherit config options;
       default = ''
         if ! blkid "${config.device}" >&2; then
-          sgdisk --clear ${config.device}
+          sgdisk --clear "${config.device}"
         fi
         ${lib.concatStrings (map (partition: ''
           # try to create the partition, if it fails, try to change the type and name
           if ! sgdisk \
             --align-end ${lib.optionalString (partition.alignment != 0) ''--set-alignment=${builtins.toString partition.alignment}''} \
             --new=${toString partition._index}:${partition.start}:${partition.end} \
-            --change-name=${toString partition._index}:${partition.label} \
+            --change-name="${toString partition._index}:${partition.label}" \
             --typecode=${toString partition._index}:${partition.type} \
-            ${config.device}
+            "${config.device}"
           then sgdisk \
-            --change-name=${toString partition._index}:${partition.label} \
+            --change-name="${toString partition._index}:${partition.label}" \
             --typecode=${toString partition._index}:${partition.type} \
-            ${config.device}
+            "${config.device}"
           fi
           # ensure /dev/disk/by-path/..-partN exists before continuing
-          partprobe ${config.device} || : # sometimes partprobe fails, but the partitions are still up2date
+          partprobe "${config.device}" || : # sometimes partprobe fails, but the partitions are still up2date
           udevadm trigger --subsystem-match=block
           udevadm settle
         '') sortedPartitions)}
@@ -202,7 +221,7 @@ in
             + (
               lib.optionalString (!config.efiGptPartitionFirst) ":EE "
             )
-            + parent.device)
+            + ''"${parent.device}"'')
         }
         ${lib.concatMapStrings (p:
             p.hybrid._create

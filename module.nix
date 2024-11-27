@@ -57,7 +57,7 @@ in
       };
 
       extraPostVM = lib.mkOption {
-        type = lib.types.str;
+        type = lib.types.lines;
         description = ''
           extra shell code to execute once the disk image(s) have been succesfully created and moved to $out
         '';
@@ -153,6 +153,15 @@ in
     };
 
     tests = {
+      bootCommands = lib.mkOption {
+        description = ''
+          NixOS test script commands to run after the machine has started. Can
+          be used to enter an interactive password.
+        '';
+        type = lib.types.lines;
+        default = "";
+      };
+
       efi = lib.mkOption {
         description = ''
           Whether efi is enabled for the `system.build.installTest`.
@@ -161,6 +170,14 @@ in
         type = lib.types.bool;
         defaultText = "config.boot.loader.systemd-boot.enable || config.boot.loader.grub.efiSupport";
         default = config.boot.loader.systemd-boot.enable || config.boot.loader.grub.efiSupport;
+      };
+
+      enableOCR = lib.mkOption {
+        description = ''
+          Sets the enableOCR option in the NixOS VM test driver.
+        '';
+        type = lib.types.bool;
+        default = false;
       };
 
       extraChecks = lib.mkOption {
@@ -194,6 +211,17 @@ in
   };
 
   config = {
+    assertions = [
+      {
+        assertion = config.disko.imageBuilder.qemu != null -> diskoLib.vmToolsSupportsCustomQemu pkgs;
+        message = ''
+          You have set config.disko.imageBuild.qemu, but vmTools in your nixpkgs version "${lib.version}"
+          does not support overriding the qemu package with the customQemu option yet.
+          Please upgrade nixpkgs so that `lib.version` is at least "24.11.20240709".
+        '';
+      }
+    ];
+
     _module.args.diskoLib = import ./lib {
       inherit lib;
       rootMountPoint = config.disko.rootMountPoint;
@@ -215,7 +243,9 @@ in
           name = "${config.networking.hostName}-disko";
           disko-config = builtins.removeAttrs config [ "_module" ];
           testMode = "direct";
+          bootCommands = cfg.tests.bootCommands;
           efi = cfg.tests.efi;
+          enableOCR = cfg.tests.enableOCR;
           extraSystemConfig = cfg.tests.extraConfig;
           extraTestScript = cfg.tests.extraChecks;
         };
@@ -226,8 +256,11 @@ in
 
     # we need to specify the keys here, so we don't get an infinite recursion error
     # Remember to add config keys here if they are added to types
-    fileSystems = lib.mkIf cfg.enableConfig cfg.devices._config.fileSystems or { };
-    boot = lib.mkIf cfg.enableConfig cfg.devices._config.boot or { };
-    swapDevices = lib.mkIf cfg.enableConfig cfg.devices._config.swapDevices or [ ];
+    fileSystems = lib.mkIf
+      cfg.enableConfig cfg.devices._config.fileSystems or { };
+    boot = lib.mkIf
+      cfg.enableConfig cfg.devices._config.boot or { };
+    swapDevices = lib.mkIf
+      cfg.enableConfig cfg.devices._config.swapDevices or [ ];
   };
 }
