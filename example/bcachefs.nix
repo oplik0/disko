@@ -21,8 +21,8 @@
               name = "root";
               end = "-0";
               content = {
-                type = "bcachefs";
-                passwordFile = "/tmp/secret.key";
+                type = "filesystem";
+                format = "bcachefs";
                 mountpoint = "/";
               };
             };
