@@ -5,8 +5,8 @@
   # but garnix currently does not allow this.
   #inputs.nixpkgs.url = "nixpkgs";
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
-
-  outputs = { self, nixpkgs, ... }:
+  inputs.fido2luks.url = "github:savau/fido2luks";
+  outputs = { self, nixpkgs, fido2luks, ... }:
     let
       lib = nixpkgs.lib;
       supportedSystems = [
@@ -30,7 +30,12 @@
       lib = diskoLib;
       packages = forAllSystems (system:
         let
-          pkgs = nixpkgs.legacyPackages.${system};
+          pkgs = import nixpkgs { inherit system overlays; };
+          overlays = [
+            (final: prev: {
+              fido2luks = fido2luks.packages.${system}.fido2luks;
+            })
+          ];
         in
         {
           disko = pkgs.callPackage ./package.nix { diskoVersion = version; };
